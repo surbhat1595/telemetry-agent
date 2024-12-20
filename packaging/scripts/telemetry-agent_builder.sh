@@ -316,7 +316,7 @@ build_source_deb() {
     fi
     rm -rf percona-telemetry-agent*
     get_tar "source_tarball"
-    rm -f *.dsc *.orig.tar.gz *.changes
+    rm -f *.dsc *.orig.tar.gz *.changes *.tar.xz
     #
     TARFILE=$(basename $(find . -name 'percona-telemetry-agent*.tar.gz' | sort | tail -n1))
     DEBIAN=$(lsb_release -sc)
@@ -332,21 +332,23 @@ build_source_deb() {
     source VERSION
     cp -r packaging/debian ./
     sed -i "s:@@VERSION@@:${VERSION}:g" debian/rules
-    sed -i "s:@@REVISION@@:${REVISION}:g" debian/rules
+    #sed -i "s:@@REVISION@@:${REVISION}:g" debian/rules
     sed -i "s:sysconfig:default:" packaging/conf/percona-telemetry-agent.service
     dch -D unstable --force-distribution -v "${VERSION}-${RELEASE}" "Update to new telemetry-agent version ${VERSION}"
     dpkg-buildpackage -S
     cd ../
     mkdir -p $WORKDIR/source_deb
     mkdir -p $CURDIR/source_deb
-    cp *_source.changes $WORKDIR/source_deb
+    #cp *_source.changes $WORKDIR/source_deb
     cp *.dsc $WORKDIR/source_deb
-    cp *.orig.tar.gz $WORKDIR/source_deb
-    cp *.diff.gz $WORKDIR/source_deb
-    cp *_source.changes $CURDIR/source_deb
+    cp *.tar.xz $WORKDIR/source_deb
+   # cp *.orig.tar.gz $WORKDIR/source_deb
+   # cp *.diff.gz $WORKDIR/source_deb
+   # cp *_source.changes $CURDIR/source_deb
     cp *.dsc $CURDIR/source_deb
-    cp *.orig.tar.gz $CURDIR/source_deb
-    cp *.diff.gz $CURDIR/source_deb
+    cp *.tar.xz $WORKDIR/source_deb
+   # cp *.orig.tar.gz $CURDIR/source_deb
+   # cp *.diff.gz $CURDIR/source_deb
 }
 
 build_deb() {
@@ -358,7 +360,7 @@ build_deb() {
         echo "It is not possible to build binary deb here"
         exit 1
     fi
-    for file in 'dsc' 'orig.tar.gz' 'changes' 'diff.gz'; do
+    for file in 'dsc' 'tar.xz'; do
         get_deb_sources $file
     done
     cd $WORKDIR
