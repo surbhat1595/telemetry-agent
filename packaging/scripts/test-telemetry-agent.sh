@@ -1,16 +1,19 @@
 #!/bin/bash
 
-# Detect OS and version
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    OS=$ID
-    VERSION_ID=$(echo $VERSION_ID | cut -d'.' -f1)
-else
-    echo "Unsupported OS"
-    exit 1
-fi
+set -x
 
+# Detect OS and version
+detect_OS() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        VERSION_ID=$(echo $VERSION_ID | cut -d'.' -f1)
+    else
+        echo "Unsupported OS"
+        exit 1
+    fi
 TARGET_TEST_VERSION="$1"
+}
 
 remove_percona_telemetry() {
     echo "Checking if Percona telemetry agent is installed..."
@@ -142,7 +145,13 @@ test_percona_telemetry_installation() {
 
     # install percona-release
     install_percona_release
-    percona-release enable telemetry testing
+    percona-release disable telemetry release
+    if [ "$OS" == "debian" ] || [ "$OS" == "ubuntu" ]; then
+        rm -f /etc/apt/sources.list.d/percona-telemetry-release.list 
+    else
+        rm -f /etc/yum.repos.d/percona-telemetry-release.repo
+    fi 
+    percona-release enable-only telemetry testing
 
     if [ "$OS" == "ol" ] || [ "$OS" == "amzn" ]; then
         yum install -y percona-telemetry-agent
@@ -190,7 +199,7 @@ test_percona_telemetry_update() {
     yum install -y percona-telemetry-agent
   elif [ "$OS" == "amzn" ]; then
     # install from testing repo until we publish to main
-    percona-release enable telemetry testing
+    percona-release enable telemetry
     yum install -y percona-telemetry-agent
   else
     # enable and install from the main repository so that we can update from that to the testing package.
@@ -240,6 +249,7 @@ test_percona_telemetry_update() {
   remove_percona_telemetry
 }
 
+detect_OS
 test_percona_telemetry_installation
 test_percona_telemetry_update "enabled"
 test_percona_telemetry_update "disabled"
