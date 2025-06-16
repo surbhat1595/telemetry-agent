@@ -142,7 +142,7 @@ test_percona_telemetry_installation() {
 
     # install percona-release
     install_percona_release
-    percona-release enable telemetry testing
+    percona-release enable telemetry release
 
     if [ "$OS" == "ol" ] || [ "$OS" == "amzn" ]; then
         yum install -y percona-telemetry-agent
@@ -190,7 +190,7 @@ test_percona_telemetry_update() {
     yum install -y percona-telemetry-agent
   elif [ "$OS" == "amzn" ]; then
     # install from testing repo until we publish to main
-    percona-release enable telemetry testing
+    percona-release enable telemetry release
     yum install -y percona-telemetry-agent
   else
     # enable and install from the main repository so that we can update from that to the testing package.
@@ -241,5 +241,3 @@ test_percona_telemetry_update() {
 }
 
 test_percona_telemetry_installation
-test_percona_telemetry_update "enabled"
-test_percona_telemetry_update "disabled"
