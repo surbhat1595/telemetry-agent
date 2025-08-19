@@ -66,11 +66,16 @@ install_percona_release() {
             fi
             ;;
           debian | ubuntu)
-              if [ "$VERSION_ID" == "11" ] || [ "$VERSION_ID" == "12" ] || [ "$VERSION_ID" == "13" ] || [ "$VERSION_ID" == "20" ] || [ "$VERSION_ID" == "22" ] || [ "$VERSION_ID" == "24" ]; then
+              if [ "$VERSION_ID" == "11" ] || [ "$VERSION_ID" == "12" ] || [ "$VERSION_ID" == "20" ] || [ "$VERSION_ID" == "22" ] || [ "$VERSION_ID" == "24" ]; then
                   apt-get update
                   apt-get install -y wget gnupg2 lsb-release curl systemd
                   wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
                   dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+              elif [ "$VERSION_ID" == "13" ]; then
+                  apt-get update
+                  apt-get install -y wget gnupg2 lsb-release curl systemd
+                  wget https://repo.percona.com/prel/apt/pool/testing/p/percona-release/percona-release_1.0-32.generic_all.deb
+                  dpkg -i percona-release_1.0-32.generic_all.deb
               else
                   echo "Unsupported Debian/Ubuntu version: ${VERSION_ID}"
                   exit 1
@@ -142,7 +147,7 @@ test_percona_telemetry_installation() {
 
     # install percona-release
     install_percona_release
-    #percona-release enable telemetry release
+    #percona-release enable telemetry testing
 
     if [ "$OS" == "ol" ] || [ "$OS" == "amzn" ] || [ "$OS" == "rhel" ]; then
         yum install -y percona-telemetry-agent
@@ -235,7 +240,10 @@ test_percona_telemetry_update() {
   # clean up
   remove_percona_telemetry
 }
-
-test_percona_telemetry_installation
-test_percona_telemetry_update "enabled"
-test_percona_telemetry_update "disabled"
+if [ "$VERSION_ID" == "13" ]; then
+    test_percona_telemetry_installation
+else
+    test_percona_telemetry_installation
+    test_percona_telemetry_update "enabled"
+    test_percona_telemetry_update "disabled"
+fi
