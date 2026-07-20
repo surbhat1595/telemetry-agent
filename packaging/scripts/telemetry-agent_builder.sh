@@ -101,7 +101,9 @@ get_sources() {
     REVISION=$(git rev-parse --short HEAD)
     GITCOMMIT=$(git rev-parse HEAD 2>/dev/null)
     GITBRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    COMPONENT_VERSION=$(git describe --abbrev=0 --always --tags)
+    # Use release --version for the embedded binary version (not git describe,
+    # which can resolve to an older tag on forks/shallow checkouts).
+    COMPONENT_VERSION="v${VERSION}"
     TELEMETRY_AGENT_RELEASE_FULLCOMMIT=$(git rev-parse HEAD)
     echo "VERSION=${VERSION}" >VERSION
     echo "REVISION=${REVISION}" >>VERSION
@@ -158,36 +160,14 @@ get_go_version() {
     grep '^go ' "${GO_MOD_TMP}" | awk '{print $2}'
 }
 
+# Resolute Jenkins images block openat2, so GNU tar fails with ENOSYS.
+# Use python only there; all other distros keep normal tar/dpkg-source.
 is_resolute() {
     [ "x${DEBIAN:-$OS_NAME}" = "xresolute" ]
 }
 
-# GNU tar 1.35+ uses openat2, which returns ENOSYS in Jenkins nspawn/chroot
-# on Ubuntu Resolute. Use python3 for extraction there only.
-extract_tar_gz() {
-    archive="$1"
-    if is_resolute; then
-        python3 -c "import tarfile; tarfile.open('${archive}').extractall('.')"
-    else
-        tar zxf "${archive}"
-    fi
-}
-
-dpkg_source_extract() {
-    dsc="$1"
-    if is_resolute; then
-        # .dsc lists the same .tar.xz under Files/Checksums-* sections; take one name
-        tarxz=$(grep '\.tar\.xz$' "${dsc}" | awk '{print $NF}' | head -n1)
-        if [ -z "${tarxz}" ] || [ ! -f "${tarxz}" ]; then
-            echo "Failed to find source tarball for ${dsc}"
-            exit 1
-        fi
-        sourcedir=$(grep '^Source:' "${dsc}" | awk '{print $2}')-$(grep '^Version:' "${dsc}" | awk '{print $2}')
-        rm -rf "${sourcedir}"
-        python3 -c "import tarfile; tarfile.open('${tarxz}', 'r:xz').extractall('.')"
-    else
-        dpkg-source -x "${dsc}"
-    fi
+py_extract() {
+    python3 -c "import tarfile; tarfile.open('$1').extractall('${2:-.}')"
 }
 
 install_golang() {
@@ -203,12 +183,9 @@ install_golang() {
     fi
     echo "Installing Go ${GO_VERSION}"
     wget https://golang.org/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz -O /tmp/golang${GO_VERSION}.tar.gz
-
-    # Ubuntu Resolute's GNU tar uses openat2, which returns ENOSYS in Jenkins
-    # nspawn/chroot. Use python only there; keep tar --transform elsewhere.
     if is_resolute; then
         rm -rf /tmp/go /tmp/go${GO_VERSION}
-        python3 -c "import tarfile; tarfile.open('/tmp/golang${GO_VERSION}.tar.gz').extractall('/tmp')"
+        py_extract /tmp/golang${GO_VERSION}.tar.gz /tmp
         mv /tmp/go /tmp/go${GO_VERSION}
         rm -rf /usr/local/go*
         mv /tmp/go${GO_VERSION} /usr/local/
@@ -248,9 +225,8 @@ install_deps() {
         export DEBIAN=$(lsb_release -sc)
         export ARCH=$(echo $(uname -m) | sed -e 's:i686:i386:g')
         INSTALL_LIST="wget devscripts debhelper debconf pkg-config curl make golang git"
-        # python3 needed only on Resolute (GNU tar openat2 ENOSYS workaround)
         if is_resolute; then
-            INSTALL_LIST="${INSTALL_LIST} python3"
+            INSTALL_LIST="${INSTALL_LIST} python3 binutils"
         fi
         until DEBIAN_FRONTEND=noninteractive apt-get -y install ${INSTALL_LIST}; do
             sleep 1
@@ -394,7 +370,11 @@ build_source_deb() {
     TARFILE=$(basename $(find . -name 'percona-telemetry-agent*.tar.gz' | sort | tail -n1))
     DEBIAN=$(lsb_release -sc)
     ARCH=$(echo $(uname -m) | sed -e 's:i686:i386:g')
-    extract_tar_gz ${TARFILE}
+    if is_resolute; then
+        py_extract "${TARFILE}"
+    else
+        tar zxf ${TARFILE}
+    fi
     BUILDDIR=${TARFILE%.tar.gz}
     #
     rm -fr ${BUILDDIR}/debian
@@ -448,7 +428,13 @@ build_deb() {
     #
     DSC=$(basename $(find . -name '*.dsc' | sort | tail -n1))
     #
-    dpkg_source_extract ${DSC}
+    if is_resolute; then
+        # dpkg-source shells out to GNU tar; unpack the .tar.xz with python instead
+        tarxz=$(awk '/\.tar\.xz$/ {print $NF; exit}' "${DSC}")
+        py_extract "${tarxz}"
+    else
+        dpkg-source -x ${DSC}
+    fi
     #
     cd ${PRODUCT}-${VERSION}
     source VERSION
@@ -463,6 +449,10 @@ build_deb() {
     export GOBINPATH="/usr/local/go/bin"
 
     dpkg-buildpackage -rfakeroot -us -uc -b
+    if [ $? -ne 0 ]; then
+        echo "dpkg-buildpackage failed"
+        exit 1
+    fi
     mkdir -p $CURDIR/deb
     mkdir -p $WORKDIR/deb
     cp $WORKDIR/*.deb $WORKDIR/deb

@@ -23,7 +23,12 @@ export TELEMETRY_AGENT_RELEASE_FULLCOMMIT=$(shell egrep '^TELEMETRY_AGENT_RELEAS
 	dh $@ --with-systemd
 
 override_dh_builddeb:
-	dh_builddeb -- -Zgzip
+	@if [ "$$(lsb_release -cs 2>/dev/null)" = "resolute" ]; then \
+		echo "Resolute: building .deb with python/ar (GNU tar openat2 workaround)"; \
+		python3 $(CURDIR)/packaging/scripts/build_deb_resolute.py; \
+	else \
+		dh_builddeb -- -Zgzip; \
+	fi
 
 override_dh_auto_test override_dh_compress override_dh_fixperms override_dh_strip:
 
