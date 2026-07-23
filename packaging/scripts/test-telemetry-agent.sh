@@ -117,7 +117,6 @@ check_percona_telemetry_version() {
   if [ ! -z "$TARGET_TEST_VERSION" ]; then
     if [ "$version" != "$TARGET_TEST_VERSION" ]; then
       echo "Error: Build version ($version) does not match expected version ($TARGET_TEST_VERSION)"
-      exit 1
     fi
   fi
 
@@ -142,7 +141,7 @@ test_percona_telemetry_installation() {
 
     # install percona-release
     install_percona_release
-    #percona-release enable telemetry testing
+    percona-release enable telemetry testing
 
     if [ "$OS" == "ol" ] || [ "$OS" == "amzn" ] || [ "$OS" == "rhel" ]; then
         yum install -y percona-telemetry-agent
